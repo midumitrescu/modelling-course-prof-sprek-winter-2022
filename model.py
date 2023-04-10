@@ -53,7 +53,7 @@ class MouseModel():
 
     def __init__(self, T=1000, dt=0.1,
                  sigma_movement=np.array([0.1, 0.2]),
-                 start_mouse_1=None, start_mouse_2=None,
+                 starting_position=np.zeros(4),
                  environment=default_environent,
                  mating_w=None,
                  sigma_mating=np.array([1, 1])):
@@ -69,38 +69,34 @@ class MouseModel():
         self.sigma_movement = sigma_movement
         self.mouse_1_trajectory = np.zeros((2, self.iterations - 1))
         self.mouse_2_trajectory = np.zeros((2, self.iterations - 1))
-        if start_mouse_1 is not None:
-            self.mouse_1_trajectory[:, 0] = start_mouse_1
-        if start_mouse_2 is not None:
-            self.mouse_2_trajectory[:, 0] = start_mouse_2
+        self.mouse_1_trajectory[:, 0] = starting_position[:2]
+        self.mouse_2_trajectory[:, 0] = starting_position[2:]
         self.environment = environment
 
         if mating_w is None:
             mating_w = 2 * np.pi / T
 
         self.mating_period = np.sin(mating_w * self.time + np.pi / 2)
+        self.sigma_mating = sigma_mating
 
-    def __simulate_noise__(self):
-        covar_scaled_with_sqrt_dt = np.array(
-            [[self.dt, 0], [0, self.dt]])
+    def simulate_independent_movement(self):
 
-
-        self.noise_mouse_1 = np.random.multivariate_normal([0, 0],
-                                                           self.sigma_movement[0] ** 2 * covar_scaled_with_sqrt_dt,
-                                                           self.iterations).T
-        self.noise_mouse_2 = np.random.multivariate_normal([0, 0],
-                                                           self.sigma_movement[1] ** 2 * covar_scaled_with_sqrt_dt,
-                                                           self.iterations).T
+        extended_sigma_movement = np.repeat(self.sigma_movement, 2) ** 2
+        covar_scaled_with_sqrt_dt = np.diag(self.dt * extended_sigma_movement)
+        self.noise_driven_movement = np.random.multivariate_normal(np.zeros(4),
+                                                                   covar_scaled_with_sqrt_dt,
+                                                                   self.iterations).T
 
     def simulate(self):
-        self.__simulate_noise__()
+        self.simulate_independent_movement()
 
         for index in range(0, len(self.time) - 2):
             mating = self.mating_model(index)
-            self.mouse_1_trajectory[:, index + 1] = self.mouse_1_trajectory[:, index] + movement_model(index,
-                                                                                                       self.noise_mouse_1)
-            self.mouse_2_trajectory[:, index + 1] = self.mouse_2_trajectory[:, index] + movement_model(index,
-                                                                                                       self.noise_mouse_2)
+            self.mouse_1_trajectory[:, index + 1] = self.mouse_1_trajectory[:, index] \
+                                                    + movement_model(index, self.noise_driven_movement[
+                                                                            :2, :])
+            self.mouse_2_trajectory[:, index + 1] = self.mouse_2_trajectory[:, index] \
+                                                    + movement_model(index, self.noise_driven_movement[2:, :])
             self.environment.correct_for_overflow(self.mouse_1_trajectory, index + 1)
             self.environment.correct_for_overflow(self.mouse_2_trajectory, index + 1)
         return np.vstack((self.mouse_1_trajectory, self.mouse_2_trajectory))
@@ -111,7 +107,8 @@ class MouseModel():
         m_2 = self.mouse_2_trajectory[:, index]
         distance_squared = np.sum((m_1 - m_2) ** 2)
 
-        mating_strength = 2 * self.mating_period[index] * (m_1 - m_2) * np.exp(-distance_squared)
+        mating_ = 2 * self.mating_period[index] * (m_1 - m_2) * np.exp(-distance_squared / (self.sigma_mating ** 2))
+        mating_strength = mating_
         return np.vstack(
             (mating_strength,
              -mating_strength)
@@ -119,13 +116,14 @@ class MouseModel():
 
 
 def plot_trajectory(trajectory, fig=plt, ax=plt.gca(), color='blue', label='Mouse', show=True,
-                    enviroment=default_environent):
+                    environment=default_environent):
     ax.plot(trajectory[0], trajectory[1], color=color, label=label)
     ax.set_aspect("equal")
     ax.legend()
 
-    rect = patches.Rectangle((enviroment.x_lims.left - .05, enviroment.y_lims.left - .05), enviroment.x_width() + 0.1,
-                             enviroment.y_width() + 0.1, linewidth=3, edgecolor='r', facecolor='none')
+    rect = patches.Rectangle((environment.x_lims.left - .05, environment.y_lims.left - .05),
+                             environment.x_width() + 0.1,
+                             environment.y_width() + 0.1, linewidth=3, edgecolor='r', facecolor='none')
     ax.add_patch(rect)
     if show:
         fig.show()
@@ -161,7 +159,7 @@ class ModelTestCases(unittest.TestCase):
         last_x, last_y = overflow[:, -1]
 
     def test_inputting_a_start_vector_makes_mouse_start_there(self):
-        model = MouseModel(start_mouse_1=[1, 1])
+        model = MouseModel(starting_position=(np.array([1, 1, 0, 0])))
         trajectory = model.simulate()
         assert_array_equal([1, 1], trajectory[:2, 0])
 
@@ -171,9 +169,18 @@ class ModelTestCases(unittest.TestCase):
         mouse_model = MouseModel()
 
         trajectory = mouse_model.simulate()
+        plot_trajectory(trajectory[:2], color='red', label='Mouse 1', show=False)
+        plot_trajectory(trajectory[2:], color='green', label='Mouse 2', show=True)
+
+    def test_forward_euler_with_noise_bigger_env(self):
+        np.random.seed(0)
+
+        mouse_model = MouseModel()
+
+        trajectory = mouse_model.simulate()
         bigger_env = Environment(x_lims=Box_limits(-4, 4), y_lims=Box_limits(-4, 4))
-        plot_trajectory(trajectory[:2], color='red', label='Mouse 1', show=False, enviroment=bigger_env)
-        plot_trajectory(trajectory[2:], color='green', label='Mouse 2', show=True, enviroment=bigger_env)
+        plot_trajectory(trajectory[:2], color='red', label='Mouse 1', show=False, environment=bigger_env)
+        plot_trajectory(trajectory[2:], color='green', label='Mouse 2', show=True, environment=bigger_env)
 
     def test_mating_period_function_1(self):
         plt.plot(self.default_model.time, self.default_model.mating_period)
@@ -184,27 +191,39 @@ class ModelTestCases(unittest.TestCase):
         plt.plot(test_model.time, test_model.mating_period)
         plt.show()
 
-    def test_mating_function(self):
-        test_model = MouseModel(sigma_movement=np.array([10 ** -5, 10 ** -5]), start_mouse_1=np.array([-2, -2]),
-                                start_mouse_2=np.array([2, 2]))
+    def test_low_sigma_movement_implies_no_movement(self):
+        test_model = MouseModel(sigma_movement=np.array([10 ** -6, 10 ** -6]), starting_position=(np.array([-2, -2, 2, 2])))
         trajectory = test_model.simulate()
+
+        np.apply_along_axis(lambda array: assert_array_almost_equal([-2, -2, 2, 2], array, decimal=4,
+                                                                    err_msg='Mice should not move with such low sigma'),
+                            arr=trajectory, axis=0)
 
         plot_trajectory(trajectory[:2], show=False, label='Mouse 1')
         plot_trajectory(trajectory[2:], color='green', label='Mouse 2', show=True)
 
     def test_movement_model(self):
         np.random.seed(0)
-        test_model = MouseModel(start_mouse_1=np.array([-2, -2]),
-                                start_mouse_2=np.array([2, 2]),
+        test_model = MouseModel(starting_position=(np.array([-2, -2, 2, 2])),
                                 mating_w=0)
         trajectory = test_model.simulate()
 
         assert_array_almost_equal(np.array([
-            [-2.00000, -1.94422, -1.91327, -1.85421, -1.82416, -1.82743, -1.82287, -1.79881, -1.78477, -1.73752],
-            [-2.00000, -1.98735, -1.91648, -1.94739, -1.95217, -1.93919, -1.89320, -1.88935, -1.87880, -1.88529],
-            [2.00000, 2.02087, 2.07262, 1.91425, 1.96535, 1.91063, 1.89542, 1.92912, 1.87498, 1.91628],
-            [2.00000, 1.99997, 2.02705, 2.03467, 2.07275, 2.06306, 2.05921, 2.10756, 2.00116, 2.05999]]),
+            [-2.00000, -1.96905, -1.93901, -1.93445, -1.92041, -1.91051, -1.88318, -1.88173, -1.87683, -1.88783],
+            [-2.00000, -1.92914, -1.93392, -1.88793, -1.87738, -1.90439, -1.92786, -1.93378, -1.92182, -1.91688],
+            [2.00000, 2.11157, 2.22968, 2.22316, 2.27129, 2.36578, 2.20432, 2.34787, 2.44481, 2.38866],
+            [2.00000, 2.02531, 1.96350, 1.98947, 1.99716, 1.98419, 2.02553, 1.93354, 2.02647, 1.90120]]),
             trajectory[:, :10], decimal=5)
 
-        if __name__ == '__main__':
-            unittest.main()
+    def test_movement_variance(self):
+        np.random.seed(0)
+        test_model = MouseModel()
+        test_model.simulate_independent_movement()
+        movement = test_model.noise_driven_movement
+        assert_array_almost_equal([0.001, 0.001, 0.004, 0.004],
+                                  np.var(movement, axis=1), decimal=3)
+
+    def test_mating_function(self):
+        no_noise_model = MouseModel(sigma_movement=np.array([10 ** -8, 10 ** -8]))
+        no_noise_model.mating_model(index=0)
+
