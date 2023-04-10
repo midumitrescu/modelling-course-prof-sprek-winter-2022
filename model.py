@@ -67,10 +67,8 @@ class MouseModel():
         self.y_lims = Box_limits(-3, 3)
 
         self.sigma_movement = sigma_movement
-        self.mouse_1_trajectory = np.zeros((2, self.iterations - 1))
-        self.mouse_2_trajectory = np.zeros((2, self.iterations - 1))
-        self.mouse_1_trajectory[:, 0] = starting_position[:2]
-        self.mouse_2_trajectory[:, 0] = starting_position[2:]
+        self.mice_trajectory = np.zeros((4, self.iterations - 1))
+        self.mice_trajectory[:, 0] = starting_position
         self.environment = environment
 
         if mating_w is None:
@@ -92,19 +90,16 @@ class MouseModel():
 
         for index in range(0, len(self.time) - 2):
             mating = self.mating_model(index)
-            self.mouse_1_trajectory[:, index + 1] = self.mouse_1_trajectory[:, index] \
-                                                    + movement_model(index, self.noise_driven_movement[
-                                                                            :2, :])
-            self.mouse_2_trajectory[:, index + 1] = self.mouse_2_trajectory[:, index] \
-                                                    + movement_model(index, self.noise_driven_movement[2:, :])
-            self.environment.correct_for_overflow(self.mouse_1_trajectory, index + 1)
-            self.environment.correct_for_overflow(self.mouse_2_trajectory, index + 1)
-        return np.vstack((self.mouse_1_trajectory, self.mouse_2_trajectory))
+            self.mice_trajectory[:, index + 1] = self.mice_trajectory[:, index] \
+                                                    + self.noise_driven_movement[:, index]
+            self.environment.correct_for_overflow(self.mice_trajectory[:2], index + 1)
+            self.environment.correct_for_overflow(self.mice_trajectory[2:], index + 1)
+        return self.mice_trajectory
 
     def mating_model(self, index):
 
-        m_1 = self.mouse_1_trajectory[:, index]
-        m_2 = self.mouse_2_trajectory[:, index]
+        m_1 = self.mice_trajectory[:2, index]
+        m_2 = self.mice_trajectory[2:, index]
         distance_squared = np.sum((m_1 - m_2) ** 2)
 
         mating_ = 2 * self.mating_period[index] * (m_1 - m_2) * np.exp(-distance_squared / (self.sigma_mating ** 2))
