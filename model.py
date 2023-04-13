@@ -71,16 +71,27 @@ class Experiment:
     def reset(self):
         self.current_index = 0
 
+    @property
+    def current_time(self):
+        return self.time[self.current_index]
+
 
 default_experiment = Experiment()
 
+class Model:
+    def __init__(self, experiment: Experiment = default_experiment):
+        self._experiment = experiment
 
-class Mating_Model:
+    @property
+    def experiment(self):
+        return self._experiment
 
-    def __init__(self, experiment: Experiment = default_experiment, mating_w=None,
-                 sigma_mating=np.array([2, 2]),
+
+class Mating_Model(Model):
+
+    def __init__(self, experiment: Experiment = default_experiment, mating_w=None, sigma_mating=np.array([2, 2]),
                  mating_peak=np.array([0.005, 0.005])):
-        self.experiment = experiment
+        super().__init__(experiment)
         if mating_w is None:
             mating_w = 2 * np.pi / experiment.T
 
@@ -105,11 +116,11 @@ class Mating_Model:
 default_mating_model = Mating_Model()
 
 
-class Movement_Model:
+class Movement_Model(Model):
 
     def __init__(self, experiment: Experiment = default_experiment,
                  sigma_movement=np.array([0.05, 0.1]), testing=True):
-        self.experiment = experiment
+        super().__init__(experiment)
         self.sigma_movement = sigma_movement
 
         if testing:
@@ -118,7 +129,6 @@ class Movement_Model:
         self.simulate_independent_movement()
 
     def simulate_independent_movement(self):
-
         print('Simulating indep movement')
         extended_sigma_movement = np.repeat(self.sigma_movement, 2) ** 2
         covar_scaled_with_sqrt_dt = np.diag(self.experiment.dt * extended_sigma_movement)
@@ -134,17 +144,43 @@ class Movement_Model:
 default_movement_model = Movement_Model()
 
 
-class Mouse_Model:
+class Feeding_Model(Model):
 
-    def __init__(self,
-                 experiment: Experiment = default_experiment,
-                 starting_position=np.zeros(4),
-                 environment=default_environent,
-                 movement_model: Movement_Model = default_movement_model,
-                 mating_model: Mating_Model = default_mating_model
-                 ):
+    def __init__(self, environment: Environment = default_environent, experiment: Experiment = default_experiment,
+                 food_position=None, feeding_radius=10 ** -3):
         self.environment = environment
-        self.experiment = experiment
+        super().__init__(experiment)
+
+        self.food_pos = self.init_food_position(food_position)
+        self.mouse_1_feed_events = list()
+        self.mouse_2_feed_events = list()
+        self.feeding_radius = feeding_radius
+
+    def init_food_position(self, food_position):
+        if food_position is not None:
+            return food_position
+
+        x_pos = self.environment.x_width() * (np.random.random() - 0.5)
+        y_pos = self.environment.y_width() * (np.random.random() - 0.5)
+        return np.array([x_pos, y_pos])
+
+    def check_if_mice_are_feeding(self, mouse_position):
+        if np.linalg.norm(mouse_position[:2], self.food_pos) < self.feeding_radius:
+            self.mouse_1_feed_events.append(self.experiment.current_time)
+        if np.linalg.norm(mouse_position[2:], self.food_pos) < self.feeding_radius:
+            self.mouse_2_feed_events.append(self.experiment.current_time)
+
+        pass
+
+
+class Mouse_Model(Model):
+
+    def __init__(self, experiment: Experiment = default_experiment, starting_position=np.zeros(4),
+                 environment=default_environent, movement_model: Movement_Model = default_movement_model,
+                 mating_model: Mating_Model = default_mating_model):
+        self.environment = environment
+        super().__init__(experiment)
+        
         self.mating_model = mating_model
         self.movement_model = movement_model
 
@@ -343,3 +379,8 @@ class Model_Test_Cases(unittest.TestCase):
         np.random.seed(0)
         second = Movement_Model()
         assert_array_almost_equal(first.noise_driven_movement, second.noise_driven_movement)
+
+    def test_hunger_position_initialization(self):
+        for initialization in map(lambda _: Feeding_Model().food_pos, range(0, 1000)):
+            self.assertTrue(-3 <= initialization[0] <= 3)
+            self.assertTrue(-3 <= initialization[1] <= 3)
