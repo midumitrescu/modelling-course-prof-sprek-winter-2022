@@ -1,5 +1,6 @@
 import random
 import unittest
+from abc import abstractmethod
 from collections import namedtuple
 from numpy.testing import *
 
@@ -52,7 +53,7 @@ def movement_model(index, noise_mouse):
 class Experiment:
 
     def __init__(self, T=1000, dt=0.1):
-        self.T = 1000
+        self.T = 1000  # seconds
         self.dt = 0.1
 
         self.iterations = int(T / dt)
@@ -78,13 +79,46 @@ class Experiment:
 
 default_experiment = Experiment()
 
+
 class Model:
-    def __init__(self, experiment: Experiment = default_experiment):
+    def __init__(self, experiment: Experiment = default_experiment, environment: Environment = default_environent,
+                 starting_position=np.zeros(4), active=True):
         self._experiment = experiment
+        self._environment = environment
+        self.mice_trajectory = np.zeros((4, self.experiment.iterations))
+        self.all_gradients = np.zeros((4, self.experiment.iterations))
+        self.mice_trajectory[:, 0] = starting_position
 
     @property
     def experiment(self):
         return self._experiment
+
+    @property
+    def environment(self):
+        return self._environment
+
+    def simulate(self):
+        self.experiment.reset()
+
+        for index in range(0, len(self.experiment.time) - 1):
+            gradient = self.gradient(self.mice_trajectory[:, self.experiment.current_index])
+            self.mice_trajectory[:, self.experiment.current_index + 1] = \
+                self.mice_trajectory[:, self.experiment.current_index] + \
+                gradient
+
+            self.environment.correct_for_overflow(self.mice_trajectory[:2], self.experiment.next_index())
+            self.environment.correct_for_overflow(self.mice_trajectory[2:], self.experiment.next_index())
+
+            self.save_gradient(gradient)
+            self.experiment.step()
+        return self.mice_trajectory
+
+    @abstractmethod
+    def gradient(self, mice_position):
+        pass
+
+    def save_gradient(self, gradient):
+        self.all_gradients[:, self.experiment.current_index] = gradient
 
 
 class Mating_Model(Model):
@@ -98,19 +132,21 @@ class Mating_Model(Model):
         self.mating_period = np.sin(mating_w * experiment.time)
         self.sigma_mating = sigma_mating
         self.mating_peak = mating_peak
-        self.all_mating = np.zeros((4, experiment.iterations - 1))
+        self.all_mating_gradients = np.zeros((4, experiment.iterations - 1))
 
-    def mating_model(self, mice_position):
-        m_1 = mice_position[:2, self.experiment.current_index]
-        m_2 = mice_position[2:, self.experiment.current_index]
+    def gradient(self, mice_position):
+        m_1 = mice_position[:2]
+        m_2 = mice_position[2:]
         distance_squared = np.sum((m_1 - m_2) ** 2)
 
-        mating_ = -1 * self.mating_peak * 2 * self.mating_period[self.experiment.current_index] * (m_1 - m_2) * np.exp(
-            -distance_squared / (self.sigma_mating ** 2))
-        mating_strength = mating_
-        mating_response_at_index = np.hstack((mating_strength, -mating_strength)).T
-        self.all_mating[:, self.experiment.current_index] = mating_response_at_index
-        return mating_response_at_index
+        mating_strength = -1 * self.mating_peak * \
+                          2 * self.mating_period[self.experiment.current_index] * \
+                          (m_1 - m_2) * \
+                          np.exp(-distance_squared / (self.sigma_mating ** 2))
+
+        mating_gradient = np.hstack((mating_strength, -mating_strength)).T
+        self.all_mating_gradients[:, self.experiment.current_index] = mating_gradient
+        return mating_gradient
 
 
 default_mating_model = Mating_Model()
@@ -129,32 +165,35 @@ class Movement_Model(Model):
         self.simulate_independent_movement()
 
     def simulate_independent_movement(self):
-        print('Simulating indep movement')
         extended_sigma_movement = np.repeat(self.sigma_movement, 2) ** 2
         covar_scaled_with_sqrt_dt = np.diag(self.experiment.dt * extended_sigma_movement)
         self.noise_driven_movement = np.random.multivariate_normal(np.zeros(4),
                                                                    covar_scaled_with_sqrt_dt,
                                                                    self.experiment.iterations).T
-        print('haha')
 
-    def movement_model(self):
+    def gradient(self, mice_position):
         return self.noise_driven_movement[:, self.experiment.current_index]
 
 
 default_movement_model = Movement_Model()
 
 
+def sigmoid(x, half_value=100, max: float = 1, slope=25):
+    return max / (1 + np.exp(- (x - half_value) / slope))
+
+
 class Feeding_Model(Model):
 
     def __init__(self, environment: Environment = default_environent, experiment: Experiment = default_experiment,
-                 food_position=None, feeding_radius=10 ** -3):
-        self.environment = environment
-        super().__init__(experiment)
+                 food_position: np.ndarray = None, feeding_radius=10 ** -3,
+                 hunger_freq: np.ndarray = np.array([100, 100])):
+        super().__init__(experiment, environment)
 
         self.food_pos = self.init_food_position(food_position)
-        self.mouse_1_feed_events = list()
-        self.mouse_2_feed_events = list()
+        self.mouse_1_feed_events = list([-100])
+        self.mouse_2_feed_events = list([-100])
         self.feeding_radius = feeding_radius
+        self.hunger_freq = hunger_freq
 
     def init_food_position(self, food_position):
         if food_position is not None:
@@ -164,42 +203,44 @@ class Feeding_Model(Model):
         y_pos = self.environment.y_width() * (np.random.random() - 0.5)
         return np.array([x_pos, y_pos])
 
-    def check_if_mice_are_feeding(self, mouse_position):
-        if np.linalg.norm(mouse_position[:2], self.food_pos) < self.feeding_radius:
+    def check_if_mice_are_feeding(self, mice_position):
+        if np.linalg.norm(mice_position[:2] - self.food_pos) < self.feeding_radius:
             self.mouse_1_feed_events.append(self.experiment.current_time)
-        if np.linalg.norm(mouse_position[2:], self.food_pos) < self.feeding_radius:
+            print(f'Mouse 1 has fed at time {self.experiment.current_time}')
+        if np.linalg.norm(mice_position[2:] - self.food_pos) < self.feeding_radius:
             self.mouse_2_feed_events.append(self.experiment.current_time)
+            print(f'Mouse 2 has fed at time {self.experiment.current_time}')
 
-        pass
+    def gradient(self, mice_position):
+
+        self.check_if_mice_are_feeding(mice_position)
+        last_feeding = np.array([self.mouse_1_feed_events[-1], self.mouse_2_feed_events[-1]])
+        next_ideal_feeding_time = last_feeding + self.hunger_freq
+
+        return -1 * (mice_position - np.tile(self.food_pos, 2)) * np.repeat(sigmoid(next_ideal_feeding_time, max=0.1),
+                                                                            2)
+
+
+default_feeding_model = Feeding_Model()
+no_feeding = type("No_Feeding_Model", (Feeding_Model, object), {"gradient": lambda self, _: np.zeros(4)})()
 
 
 class Mouse_Model(Model):
 
     def __init__(self, experiment: Experiment = default_experiment, starting_position=np.zeros(4),
                  environment=default_environent, movement_model: Movement_Model = default_movement_model,
-                 mating_model: Mating_Model = default_mating_model):
-        self.environment = environment
-        super().__init__(experiment)
-        
+                 mating_model: Mating_Model = default_mating_model,
+                 feeding_model: Feeding_Model = default_feeding_model):
+        super().__init__(experiment, environment, starting_position)
+
         self.mating_model = mating_model
         self.movement_model = movement_model
+        self.feeding_model = feeding_model
 
-        self.mice_trajectory = np.zeros((4, self.experiment.iterations - 1))
-        self.mice_trajectory[:, 0] = starting_position
-
-    def simulate(self):
-        self.experiment.reset()
-
-        for index in range(0, len(self.experiment.time) - 2):
-            self.mice_trajectory[:, self.experiment.current_index + 1] = \
-                self.mice_trajectory[:, self.experiment.current_index] + \
-                self.movement_model.movement_model() + \
-                self.mating_model.mating_model(self.mice_trajectory)
-
-            self.environment.correct_for_overflow(self.mice_trajectory[:2], self.experiment.next_index())
-            self.environment.correct_for_overflow(self.mice_trajectory[2:], self.experiment.next_index())
-            self.experiment.step()
-        return self.mice_trajectory
+    def gradient(self, mice_position):
+        return self.movement_model.gradient(mice_position) + \
+               self.mating_model.gradient(mice_position) + \
+               self.feeding_model.gradient(mice_position)
 
 
 def plot_trajectory(trajectory, fig=plt, ax=plt.gca(), color='blue', label='Mouse', show=True,
@@ -221,9 +262,6 @@ class Model_Test_Cases(unittest.TestCase):
 
     def test_size_of_time_array_is_as_expected(self):
         self.assertEqual(10000, default_experiment.time.size)
-
-    def test_forward_euler_working(self):
-        pass
 
     def test_print_box(self):
         x = np.linspace(-3, 3, default_experiment.iterations)
@@ -291,7 +329,9 @@ class Model_Test_Cases(unittest.TestCase):
         no_mating = Mating_Model(mating_peak=np.zeros(2))
         very_low_movement = Movement_Model(sigma_movement=np.array([10 ** -6, 10 ** -6]))
         test_model = Mouse_Model(movement_model=very_low_movement,
-                                 starting_position=(np.array([-2, -2, 2, 2])), mating_model=no_mating)
+                                 starting_position=(np.array([-2, -2, 2, 2])),
+                                 mating_model=no_mating,
+                                 feeding_model=no_feeding)
         trajectory = test_model.simulate()
 
         np.apply_along_axis(lambda array: assert_array_almost_equal([-2, -2, 2, 2], array, decimal=4,
@@ -308,7 +348,8 @@ class Model_Test_Cases(unittest.TestCase):
         test_model = Mouse_Model(starting_position=(np.array([-2, -2, 2, 2])),
                                  movement_model=somewhat_high_movement_model,
                                  environment=default_environent,
-                                 mating_model=no_mating
+                                 mating_model=no_mating,
+                                 feeding_model=no_feeding
                                  )
         trajectory = test_model.simulate()
 
@@ -343,9 +384,9 @@ class Model_Test_Cases(unittest.TestCase):
         plot_trajectory(trajectory[2:], color='green', label='Mouse 2', show=True)
 
         fig, ax = plt.subplots(1, 1)
-        ax.plot(default_experiment.time[1:], np.linalg.norm(always_mating.all_mating[:2, :], axis=0),
+        ax.plot(default_experiment.time[1:], np.linalg.norm(always_mating.all_mating_gradients[:2, :], axis=0),
                 label='Mating desire of Mouse 1')
-        ax.plot(default_experiment.time[1:], np.linalg.norm(always_mating.all_mating[2:, :], axis=0),
+        ax.plot(default_experiment.time[1:], np.linalg.norm(always_mating.all_mating_gradients[2:, :], axis=0),
                 label='Mating desire of Mouse 2')
         fig.legend()
         fig.show()
@@ -366,9 +407,9 @@ class Model_Test_Cases(unittest.TestCase):
         plot_trajectory(trajectory[2:], color='green', label='Mouse 2', show=True)
 
         fig, ax = plt.subplots(1, 1)
-        ax.plot(default_experiment.time[1:], np.linalg.norm(never_mating.all_mating[:2, :], axis=0),
+        ax.plot(default_experiment.time[1:], np.linalg.norm(never_mating.all_mating_gradients[:2, :], axis=0),
                 label='Mating desire of Mouse 1')
-        ax.plot(default_experiment.time[1:], np.linalg.norm(never_mating.all_mating[2:, :], axis=0),
+        ax.plot(default_experiment.time[1:], np.linalg.norm(never_mating.all_mating_gradients[2:, :], axis=0),
                 label='Mating desire of Mouse 2')
         fig.legend()
         fig.show()
@@ -380,7 +421,61 @@ class Model_Test_Cases(unittest.TestCase):
         second = Movement_Model()
         assert_array_almost_equal(first.noise_driven_movement, second.noise_driven_movement)
 
-    def test_hunger_position_initialization(self):
-        for initialization in map(lambda _: Feeding_Model().food_pos, range(0, 1000)):
+
+class Feeding_Model_Test_Cases(unittest.TestCase):
+    def test_feeding_position_initialization(self):
+        for initialization in map(lambda _: Feeding_Model().food_pos, range(0, 10000)):
             self.assertTrue(-3 <= initialization[0] <= 3)
             self.assertTrue(-3 <= initialization[1] <= 3)
+
+    def test_feeding_model_in_isolation(self):
+        feeding_model = Feeding_Model(food_position=np.array([0, 0]))
+        feeding_model.mice_trajectory[:, 0] = [-2, -2, 1, 1]
+
+        trajectory = feeding_model.simulate()
+        plot_trajectory(trajectory[:2], show=False, label='Mouse 1')
+        plot_trajectory(trajectory[2:], color='green', label='Mouse 2', show=True)
+        plt.show()
+
+        plt.plot(default_experiment.time, feeding_model.mice_trajectory[0], color='red', label='Mouse 1 x')
+        plt.plot(default_experiment.time, feeding_model.mice_trajectory[1], color='blue', label='Mouse 1 y')
+        plt.plot(default_experiment.time, feeding_model.mice_trajectory[2], color='green', label='Mouse 2 x')
+        plt.plot(default_experiment.time, feeding_model.mice_trajectory[3], color='yellow', label='Mouse 2 y')
+        plt.ylabel("Trajectory")
+        plt.legend()
+        plt.show()
+
+    def test_sigmoid_implementation_default_values(self):
+        x = np.linspace(0, 300, 300)
+        z = sigmoid(x)
+
+        plt.plot(x, z)
+        plt.xlabel("x")
+        plt.ylabel("Sigmoid(X)")
+        plt.show()
+
+    def test_sigmoid_implementation_1(self):
+        x = np.linspace(0, 200, 400)
+        z = sigmoid(x, half_value=50, max=50)
+        self.assertAlmostEqual(25, z[100], places=0)
+
+        plt.plot(x, z)
+        plt.xlabel("x")
+        plt.ylabel("Sigmoid(X)")
+        plt.show()
+
+    def test_sigmoid_implementation_2(self):
+        x = np.linspace(-100, 300, 400)
+        z_default = sigmoid(x, half_value=100, max=50, slope=10)
+        self.assertTrue(z_default[199] < 25 < z_default[200])
+        z_steep = sigmoid(x, half_value=100, max=50, slope=5)
+        z_flat = sigmoid(x, half_value=100, max=50, slope=50)
+
+        plt.plot(x, z_default, color='red', label='Default slope')
+        plt.plot(x, z_steep, color='blue', label='Steep slope')
+        plt.plot(x, z_flat, color='green', label='Flat slope')
+        plt.xlabel("x")
+        plt.ylabel("Sigmoid(X)")
+        plt.legend()
+
+        plt.show()
