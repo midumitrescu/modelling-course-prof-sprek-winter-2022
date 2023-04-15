@@ -16,9 +16,10 @@ def width(lims: Box_limits):
 
 class Environment():
 
-    def __init__(self, x_lims=Box_limits(-3, 3), y_lims=Box_limits(-3, 3)):
+    def __init__(self, x_lims=Box_limits(-3, 3), y_lims=Box_limits(-3, 3), resolution=100):
         self.x_lims = x_lims
         self.y_lims = y_lims
+        self.resolution = resolution
 
     def x_width(self):
         return width(self.x_lims)
@@ -37,6 +38,18 @@ class Environment():
             trajectory[1, index] = trajectory[1, index - 1]
 
         return trajectory
+
+    @property
+    def x(self):
+        return self.limit_as_linspace(self.x_lims)
+
+
+    @property
+    def y(self):
+        return self.limit_as_linspace(self.y_lims)
+
+    def limit_as_linspace(self, lims: Box_limits):
+        return np.linspace(lims.left, lims.right, self.resolution)
 
 
 default_environent = Environment()
@@ -120,12 +133,12 @@ class Model:
 class Mating_Model(Model):
 
     def __init__(self, experiment: Experiment = default_experiment, mating_w=None, sigma_mating=np.array([2, 2]),
-                 mating_peak=np.array([0.005, 0.005])):
+                 mating_peak=np.array([0.005, 0.005]), phase=0):
         super().__init__(experiment)
         if mating_w is None:
             mating_w = 2 * np.pi / experiment.T
 
-        self.mating_period = np.sin(mating_w * experiment.time)
+        self.mating_period = np.sin(mating_w * experiment.time + phase)
         self.sigma_mating = sigma_mating
         self.mating_peak = mating_peak
         self.all_mating_gradients = np.zeros((4, experiment.iterations - 1))
@@ -133,16 +146,18 @@ class Mating_Model(Model):
     def gradient(self, mice_position):
         m_1 = mice_position[:2]
         m_2 = mice_position[2:]
-        distance_squared = np.sum((m_1 - m_2) ** 2)
 
-        mating_strength = -1 * self.mating_peak * \
-                          2 * self.mating_period[self.experiment.current_index] * \
+        mating_strength = -1 * 2 * self.mating_period[self.experiment.current_index] * \
                           (m_1 - m_2) * \
-                          np.exp(-distance_squared / (self.sigma_mating ** 2))
+                          self.mating_energy(m_1, m_2)
 
         mating_gradient = np.hstack((mating_strength, -mating_strength)).T
         self.all_mating_gradients[:, self.experiment.current_index] = mating_gradient
         return mating_gradient
+
+    def mating_energy(self, m_1, m_2):
+        distance_squared = np.sum((m_1 - m_2) ** 2)
+        return self.mating_peak * np.exp(-distance_squared / (self.sigma_mating ** 2))
 
 
 default_mating_model = Mating_Model()
