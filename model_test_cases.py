@@ -6,6 +6,7 @@ from numpy.testing import *
 
 from model import Feeding_Model, Mouse_Model, Movement_Model, Experiment, Mating_Model, plot_trajectory, Environment, \
     Box_limits, sigmoid, plot_both_mice
+from plotting_utils import simulate_and_plot_always_mating_scenario, plot_mating_desire
 
 default_experiment = Experiment()
 default_mating_model = Mating_Model()
@@ -127,29 +128,11 @@ class Model_Test_Cases(unittest.TestCase):
         assert_array_almost_equal([0.001, 0.001, 0.004, 0.004],
                                   np.var(movement, axis=1), decimal=3)
 
+
+
+
 class Mating_Model_Test_Cases(unittest.TestCase):
 
-    def test_mating_function_attraction_on(self):
-        always_mating = Mating_Model(sigma_mating=np.array([2.5, 2.5]),
-                                     mating_peak=np.array([0.005, 0.005]))
-        always_mating.mating_period = np.ones(default_experiment.time.shape)
-        no_noise_model = Mouse_Model(movement_model=no_movement,
-                                     starting_position=np.array([-2, -2, 2, 2]),
-                                     mating_model=always_mating,
-                                     feeding_model=no_feedind)
-
-        trajectory = no_noise_model.simulate()
-
-        plot_trajectory(trajectory[:2], show=False, label='Mouse 1')
-        plot_trajectory(trajectory[2:], color='green', label='Mouse 2', show=True)
-
-        fig, ax = plt.subplots(1, 1)
-        ax.plot(default_experiment.time[1:], np.linalg.norm(always_mating.all_mating_gradients[:2, :], axis=0),
-                label='Mating desire of Mouse 1')
-        ax.plot(default_experiment.time[1:], np.linalg.norm(always_mating.all_mating_gradients[2:, :], axis=0),
-                label='Mating desire of Mouse 2')
-        fig.legend()
-        fig.show()
 
     def test_mating_function_repulsion_on(self):
         never_mating = Mating_Model(sigma_mating=np.array([2.5, 2.5]),

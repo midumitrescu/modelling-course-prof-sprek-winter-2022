@@ -133,8 +133,8 @@ class Model:
 class Mating_Model(Model):
 
     def __init__(self, experiment: Experiment = default_experiment, mating_w=None, sigma_mating=np.array([2, 2]),
-                 mating_peak=np.array([0.005, 0.005]), phase=0):
-        super().__init__(experiment)
+                 mating_peak=np.array([0.005, 0.005]), phase=0, starting_pos = (-2, -2, 2, 2)):
+        super().__init__(experiment=experiment, starting_position=starting_pos)
         if mating_w is None:
             mating_w = 2 * np.pi / experiment.T
 
@@ -256,15 +256,17 @@ class Mouse_Model(Model):
 def plot_trajectory(trajectory, fig=plt, ax=plt.gca(), color='blue', label='Mouse', show=True,
                     environment=default_environent):
     ax.plot(trajectory[0], trajectory[1], color=color, label=label)
+    ax.set_xlabel('cage limits, x axis')
+    ax.set_ylabel('cage limits, y axis')
     ax.set_aspect("equal")
-    ax.legend()
 
     rect = patches.Rectangle((environment.x_lims.left - .05, environment.y_lims.left - .05),
                              environment.x_width() + 0.1,
-                             environment.y_width() + 0.1, linewidth=3, edgecolor='r', facecolor='none')
+                             environment.y_width() + 0.1, linewidth=3, edgecolor='black', facecolor='none')
     ax.add_patch(rect)
     if show:
         fig.show()
+    return ax
 
 
 def plot_both_mice(trajectory):
