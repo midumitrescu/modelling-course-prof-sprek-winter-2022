@@ -2,9 +2,9 @@ import os
 import sys
 
 from model import default_experiment, Mating_Model, default_environent, default_mating_model, Mouse_Model, \
-    plot_trajectory
+    plot_trajectory, sigmoid, Feeding_Model
 
-module_path = os.path.abspath(os.path.join('../src')) # or the path to your source code
+module_path = os.path.abspath(os.path.join('../src'))  # or the path to your source code
 sys.path.insert(0, module_path)
 import numpy as np
 import pdb
@@ -16,13 +16,12 @@ import unittest
 
 
 def plot_energy_3d(fig, pos, max, origin=(0, 0), sigma=2):
-
     x = default_environent.x
     y = default_environent.y
 
     x, y = np.meshgrid(x, y)
 
-    z = max * np.exp(- ((x - origin[0]) ** 2 + (y - origin[1]) ** 2) / sigma**2)
+    z = max * np.exp(- ((x - origin[0]) ** 2 + (y - origin[1]) ** 2) / sigma ** 2)
 
     ax = fig.add_subplot(1, 3, pos, projection='3d')
     ax.plot(0, 0, -1, marker='.', color='red', markersize=25)
@@ -35,6 +34,7 @@ def plot_energy_3d(fig, pos, max, origin=(0, 0), sigma=2):
     ax.set_zlim3d(-1.05, 1.05)
 
     return ax
+
 
 def plot_mating_energy_landscape(figsize=(20, 10)):
     fig = plt.figure(figsize=figsize)
@@ -50,18 +50,40 @@ def plot_mating_energy_landscape(figsize=(20, 10)):
     fig.set_tight_layout(False)
     fig.show()
 
-def simulate_and_plot_always_mating_scenario():
-    fig, ax = plt.subplots(1, 1, layout="tight")
-    always_mating = simulate_always_mating()
 
-    ax_m1 = plot_trajectory(always_mating.mice_trajectory[:2], fig, ax, show=False, label='Mouse 1 trajectory')
-    ax_m2 = plot_trajectory(always_mating.mice_trajectory[2:], fig, ax, color='red', label='Mouse 2 trajectory', show=False)
-    ax_m1.plot(-2, -2, marker='.', color='blue', markersize=25, label='Starting position of mouse 1')
-    ax_m2.plot(2, 2, marker='.', color='red', markersize=25, label='Starting position of mouse 2')
-    fig.legend(loc='center right')
-    fig.suptitle('Example of mice trajectories \n when mating season is peaking')
+def plot_mating_trajectory(model: Mating_Model, fig, ax,
+                           ax_title='when mating season is peaking'):
+    ax_m1 = plot_trajectory(model.mice_trajectory[:2], fig, ax, label='Mouse 1')
+    ax_m2 = plot_trajectory(model.mice_trajectory[2:], fig, ax, color='red', label='Mouse 2')
+    ax_m1.plot()
+    ax.set_title(ax_title)
+
+
+def exemplify_mating_on_and_mating_off_trajectory_and_gradient_evolution():
+    always_mating, always_rejecting = plot_mice_trajetories_for_mating_season_on_and_off()
+    plot_mating_desire_gradients_for_mating_on_and_off(always_mating, always_rejecting)
+
+
+def plot_mating_desire_gradients_for_mating_on_and_off(always_mating, always_rejecting):
+    fig, ax = plt.subplots(1, 2, layout="tight", figsize=(10, 4), sharex=True, sharey=True)
+    fig.suptitle("Dynamical evolution of mating desire gradient size")
+    plot_mating_desire(always_mating, fig, ax[0], ax_title='when mating season is peaking')
+    plot_mating_desire(always_rejecting, fig, ax[1], ax_title='when mice reject each other')
+    ax[1].legend(loc='center right')
+    fig.tight_layout()
     fig.show()
-    return always_mating
+
+
+def plot_mice_trajetories_for_mating_season_on_and_off():
+    fig, ax = plt.subplots(1, 2, layout="tight", figsize=(9, 9))
+    fig.suptitle("Example of mice trajectories")
+    always_mating = simulate_always_mating()
+    always_rejecting = simulate_always_rejecting()
+    plot_mating_trajectory(always_mating, fig, ax[0], ax_title='when mating season is peaking')
+    plot_mating_trajectory(always_rejecting, fig, ax[1], ax_title='when mice reject each other')
+    ax[1].legend(loc='lower right')
+    fig.show()
+    return always_mating, always_rejecting
 
 
 def simulate_always_mating():
@@ -73,18 +95,64 @@ def simulate_always_mating():
     return always_mating
 
 
-def plot_mating_desire(mating_model):
-    fig, ax = plt.subplots(1, 1, layout="tight")
+def simulate_always_rejecting():
+    always_rejecting = Mating_Model(sigma_mating=np.array([2.5, 2.5]),
+                                    mating_peak=np.array([0.005, 0.005]),
+                                    starting_pos=[-0.5, -0.5, 0.5, 0.5])
+    always_rejecting.mating_period = -1 * np.ones(default_experiment.time.shape)
 
+    always_rejecting.simulate()
+    return always_rejecting
+
+
+def plot_mating_desire(mating_model, fig, ax, ax_title):
     ax.plot(default_experiment.time[1:], np.linalg.norm(mating_model.all_mating_gradients[:2, :], axis=0),
             label='Mating desire of Mouse 1')
     ax.plot(default_experiment.time[1:], np.linalg.norm(mating_model.all_mating_gradients[2:, :], axis=0),
             label='Mating desire of Mouse 2', color='red')
     ax.set_xlabel('iterations')
     ax.set_ylabel('mating intensity')
-    fig.suptitle('Dynamical evolution of mating desire gradient size')
-    fig.legend(loc='center right')
+    ax.set_title(ax_title)
+
+
+def plot_sigmoid_function_output():
+    fig, ax = plt.subplots(1, 1, figsize=(10, 3))
+    x = np.linspace(0, 300, 300)
+    z = sigmoid(x, half_value=150)
+    ax.plot(x, z, label='σ(t)')
+    ax.plot(0, 0, marker='^', color='red', markersize=10, label='not hungry at all')
+    ax.plot(150, 0, marker='^', color='green', markersize=10, label='quite hungry')
+    ax.plot(300, 0, marker='^', color='black', markersize=10, label='extremely hungry')
+    ax.plot(x, sigmoid(x, half_value=150, slope=35), label='mouse gets hungry slower')
+    ax.plot(x, sigmoid(x, half_value=150, slope=10), label='mouse gets hungry quicker')
+    ax.hlines(y=0.5, xmin=0, xmax=150, colors='black', linestyles='dotted', label='σ(t) = 0.5')
+    ax.vlines(x=150, ymin=0, ymax=0.5, colors='black', linestyles='dotted')
+    ax.set_xlabel("t (ms)")
+    ax.set_ylabel("σ(t)")
+    ax.legend(bbox_to_anchor=(1.01, 1.01))
+    fig.suptitle(
+        'Sigmoid value evolution in time with respect to last feeding time. \n \n Example is: mice has eaten at '
+        '\n t=0 and he gets quite '
+        'hungry in 150 ms')
+    fig.tight_layout()
     fig.show()
+
+
+def plot_feeding_example_trajectory():
+    feeding_model = Feeding_Model(food_position=np.array([0, 0]), starting_pos=[-2, -2, 1, 2.7])
+
+    fig, ax = plt.subplots(1, 1, layout="tight", figsize=(4.5, 4.5))
+    fig.suptitle("Example of mice trajectories \n driven by hunger")
+
+    trajectory = feeding_model.simulate()
+    plot_trajectory(trajectory[:2], fig=fig, ax=ax, color='blue', label='Mouse 1')
+    plot_trajectory(trajectory[2:], fig=fig, ax=ax, color='red', label='Mouse 2')
+
+    ax.plot(feeding_model.food_pos[0], feeding_model.food_pos[1], marker='.', color='yellow', markersize=25,
+            label=f'Food position')
+    ax.legend(loc='lower right')
+    fig.show()
+
 
 class Ploting_Test_Cases(unittest.TestCase):
 
@@ -92,5 +160,10 @@ class Ploting_Test_Cases(unittest.TestCase):
         plot_mating_energy_landscape()
 
     def test_mating_function_attraction_on(self):
-        always_mating = simulate_and_plot_always_mating_scenario()
-        plot_mating_desire(always_mating)
+        exemplify_mating_on_and_mating_off_trajectory_and_gradient_evolution()
+
+    def test_sigmoid_implementation_default_values(self):
+        plot_sigmoid_function_output()
+
+    def test_ploting_effect_of_hunger_model_in_isolation(self):
+        plot_feeding_example_trajectory()

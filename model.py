@@ -147,7 +147,7 @@ class Mating_Model(Model):
         m_1 = mice_position[:2]
         m_2 = mice_position[2:]
 
-        mating_strength = -1 * 2 * self.mating_period[self.experiment.current_index] * \
+        mating_strength = -1 * 2 * self.sigma_mating **-2 * self.mating_period[self.experiment.current_index] * \
                           (m_1 - m_2) * \
                           self.mating_energy(m_1, m_2)
 
@@ -197,8 +197,8 @@ class Feeding_Model(Model):
 
     def __init__(self, environment: Environment = default_environent, experiment: Experiment = default_experiment,
                  food_position: np.ndarray = None, feeding_radius=10 ** -3,
-                 hunger_freq: np.ndarray = np.array([100, 100])):
-        super().__init__(experiment, environment)
+                 hunger_freq: np.ndarray = np.array([100, 100]),  starting_pos = (-2, -2, 2, 2)):
+        super().__init__(experiment=experiment, environment=environment,  starting_position=starting_pos)
 
         self.food_pos = self.init_food_position(food_position)
         self.mouse_1_feed_events = list([-100])
@@ -217,10 +217,8 @@ class Feeding_Model(Model):
     def check_if_mice_are_feeding(self, mice_position):
         if np.linalg.norm(mice_position[:2] - self.food_pos) < self.feeding_radius:
             self.mouse_1_feed_events.append(self.experiment.current_time)
-            print(f'Mouse 1 has fed at time {self.experiment.current_time}')
         if np.linalg.norm(mice_position[2:] - self.food_pos) < self.feeding_radius:
             self.mouse_2_feed_events.append(self.experiment.current_time)
-            print(f'Mouse 2 has fed at time {self.experiment.current_time}')
 
     def gradient(self, mice_position):
 
@@ -253,9 +251,11 @@ class Mouse_Model(Model):
                self.feeding_model.gradient(mice_position)
 
 
-def plot_trajectory(trajectory, fig=plt, ax=plt.gca(), color='blue', label='Mouse', show=True,
+def plot_trajectory(trajectory, fig=plt, ax=plt.gca(), color='blue', label='Mouse', show=False,
                     environment=default_environent):
-    ax.plot(trajectory[0], trajectory[1], color=color, label=label)
+    ax.plot(trajectory[0], trajectory[1], color=color, label=f'{label} trajectory')
+    ax.plot(trajectory[0, 0], trajectory[1, 0], marker = '.', color = color, markersize = 25,
+            label = f'{label} start position')
     ax.set_xlabel('cage limits, x axis')
     ax.set_ylabel('cage limits, y axis')
     ax.set_aspect("equal")

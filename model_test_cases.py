@@ -6,7 +6,6 @@ from numpy.testing import *
 
 from model import Feeding_Model, Mouse_Model, Movement_Model, Experiment, Mating_Model, plot_trajectory, Environment, \
     Box_limits, sigmoid, plot_both_mice
-from plotting_utils import simulate_and_plot_always_mating_scenario, plot_mating_desire
 
 default_experiment = Experiment()
 default_mating_model = Mating_Model()
@@ -184,15 +183,6 @@ class Feeding_Model_Test_Cases(unittest.TestCase):
         plt.plot(default_experiment.time, feeding_model.mice_trajectory[3], color='yellow', label='Mouse 2 y')
         plt.ylabel("Trajectory")
         plt.legend()
-        plt.show()
-
-    def test_sigmoid_implementation_default_values(self):
-        x = np.linspace(0, 300, 300)
-        z = sigmoid(x)
-
-        plt.plot(x, z)
-        plt.xlabel("x")
-        plt.ylabel("Sigmoid(X)")
         plt.show()
 
     def test_sigmoid_implementation_1(self):
