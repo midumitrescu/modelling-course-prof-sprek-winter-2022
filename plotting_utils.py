@@ -2,7 +2,7 @@ import os
 import sys
 
 from model import default_experiment, Mating_Model, default_environent, default_mating_model, Mouse_Model, \
-    plot_trajectory, sigmoid, Feeding_Model
+    plot_trajectory, sigmoid, Feeding_Model, Movement_Model
 
 module_path = os.path.abspath(os.path.join('../src'))  # or the path to your source code
 sys.path.insert(0, module_path)
@@ -26,7 +26,7 @@ def plot_energy_3d(fig, pos, max, origin=(0, 0), sigma=2):
     ax = fig.add_subplot(1, 3, pos, projection='3d')
     ax.plot(0, 0, -1, marker='.', color='red', markersize=25)
     ax.set_zorder(1)
-    ax.contour3D(x, y, z, 30, cmap='Blues')
+    ax.contour3D(x, y, z, 30, cmap='Blues', alpha=0.7)
     ax.set_xlabel('mouse 1, x component')
     ax.set_ylabel('mouse 1, y component')
     ax.set_zlabel('Energy value')
@@ -154,6 +154,67 @@ def plot_feeding_example_trajectory():
     fig.show()
 
 
+def plot_example_exploration_trajectories():
+    fig, ax = plt.subplots(2, 3, layout="tight", figsize=(13, 6), sharex=True, sharey=True)
+    fig.suptitle("Example trajectories of mice \n exploring using gaussian white noise")
+    for axis in ax.flatten():
+        example_movement = Movement_Model(starting_position=None, testing=False,
+                                          sigma_movement=np.array([0.07, 0.14]))
+        trajectory = example_movement.simulate()
+        plot_trajectory(trajectory[:2], fig=fig, ax=axis, color='blue', label='Mouse 1', start_pos_color='brown',
+                        show_label=False)
+        plot_trajectory(trajectory[2:], fig=fig, ax=axis, color='red', label='Mouse 2', start_pos_color='green',
+                        show_label=False)
+    ax[1, 2].legend(bbox_to_anchor=[1.01, 1.02])
+    fig.supxlabel('cage limits, x axis')
+    fig.supylabel('cage limits, y axis')
+    fig.tight_layout()
+    fig.show()
+
+
+def plot_example_full_trajectories():
+    fig, ax = plt.subplots(3, 3, layout="tight", figsize=(10, 6), sharex=True, sharey=True)
+    fig.suptitle("Example trajectories of mice")
+
+    for index in range(3):
+        example_movement = Mouse_Model(starting_position=None, movement_model=Movement_Model(testing=False,
+                                                                                             sigma_movement=[0.1, 0.2]))
+        trajectory = example_movement.simulate()
+        half_experiment = int(example_movement.experiment.iterations / 2)
+
+        plot_trajectory(trajectory[:2], fig=fig, ax=ax[index, 0], color='blue', label='Mouse 1',
+                        start_pos_color='brown',
+                        show_label=False)
+        plot_trajectory(trajectory[2:], fig=fig, ax=ax[index, 0], color='red', label='Mouse 2', start_pos_color='green',
+                        show_label=False)
+
+        plot_trajectory(trajectory[:2, :half_experiment], fig=fig, ax=ax[index, 1], color='blue', label='Mouse 1',
+                        start_pos_color='brown',
+                        show_label=False)
+        plot_trajectory(trajectory[2:, :half_experiment], fig=fig, ax=ax[index, 1], color='red', label='Mouse 2',
+                        start_pos_color='green',
+                        show_label=False)
+
+        plot_trajectory(trajectory[:2, half_experiment:], fig=fig, ax=ax[index, 2], color='blue', label='Mouse 1',
+                        start_pos_color='brown',
+                        show_label=False)
+        plot_trajectory(trajectory[2:, half_experiment:], fig=fig, ax=ax[index, 2], color='red', label='Mouse 2',
+                        start_pos_color='green',
+                        show_label=False)
+    cols = ['Full experiment\nlength', 'Mating period on\nhalf of time', 'Rejection period on\nother half of time']
+    for axis, col in zip(ax[0], cols):
+        axis.set_title(col)
+
+    for axis, row in zip(ax[:, 0], range(3)):
+        axis.set_ylabel(f'Simulation\n#{row+1}', rotation=0, size='large')
+
+    ax[1, 2].legend(bbox_to_anchor=[1.01, 1.02])
+    fig.supxlabel('cage limits, x axis')
+    fig.supylabel('cage limits, y axis')
+    fig.tight_layout()
+    fig.show()
+
+
 class Ploting_Test_Cases(unittest.TestCase):
 
     def test_plotting_gaussian_2_d(self):
@@ -167,3 +228,13 @@ class Ploting_Test_Cases(unittest.TestCase):
 
     def test_ploting_effect_of_hunger_model_in_isolation(self):
         plot_feeding_example_trajectory()
+
+    def test_plotting_movement_trajectories(self):
+        np.random.seed(0)
+        plot_example_exploration_trajectories()
+
+    def test_plotting_full_trajectories(self):
+        plot_example_full_trajectories()
+
+    def test_halves(self):
+        pass

@@ -3,6 +3,7 @@ import unittest
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.testing import *
+from parameterized import parameterized
 
 from model import Feeding_Model, Mouse_Model, Movement_Model, Experiment, Mating_Model, plot_trajectory, Environment, \
     Box_limits, sigmoid, plot_both_mice
@@ -84,13 +85,9 @@ class Model_Test_Cases(unittest.TestCase):
         plt.show()
 
     def test_low_sigma_movement_implies_no_movement(self):
-        no_mating = Mating_Model(mating_peak=np.zeros(2))
-        very_low_movement = Movement_Model(sigma_movement=np.array([10 ** -6, 10 ** -6]))
-        test_model = Mouse_Model(movement_model=very_low_movement,
-                                 starting_position=(np.array([-2, -2, 2, 2])),
-                                 mating_model=no_mating,
-                                 feeding_model=no_feedind)
-        trajectory = test_model.simulate()
+        very_low_movement = Movement_Model(sigma_movement=np.array([10 ** -5, 10 ** -5]),
+                                           starting_position=(-2, -2, 2, 2))
+        trajectory = very_low_movement.simulate()
 
         np.apply_along_axis(lambda array: assert_array_almost_equal([-2, -2, 2, 2], array, decimal=4,
                                                                     err_msg='Mice should not move with such low sigma'),
@@ -98,40 +95,36 @@ class Model_Test_Cases(unittest.TestCase):
 
         plot_both_mice(trajectory)
 
-
-
     def test_movement_model(self):
         np.random.seed(0)
-        no_mating = Mating_Model(mating_peak=np.zeros(2))
-        somewhat_high_movement_model = Movement_Model(sigma_movement=np.array([0.1, 0.2]))
-        test_model = Mouse_Model(starting_position=(np.array([-2, -2, 2, 2])),
-                                 movement_model=somewhat_high_movement_model,
-                                 environment=default_environment,
-                                 mating_model=no_mating,
-                                 feeding_model=no_feedind
-                                 )
-        trajectory = test_model.simulate()
+        somewhat_high_movement_model = Movement_Model(sigma_movement=np.array([0.1, 0.2]),
+                                                      starting_position=(np.array([-2, -2, 2, 2])))
+        trajectory = somewhat_high_movement_model.simulate()
 
         assert_array_almost_equal(np.array([
-            [-2.00000, -1.96905, -1.93901, -1.93445, -1.92041, -1.91051, -1.88318, -1.88173, -1.87683, -1.88783],
-            [-2.00000, -1.92914, -1.93392, -1.88793, -1.87738, -1.90439, -1.92786, -1.93378, -1.92182, -1.91688],
-            [2.00000, 2.11157, 2.22968, 2.22316, 2.27129, 2.36578, 2.20432, 2.34787, 2.44481, 2.38866],
-            [2.00000, 2.02531, 1.96350, 1.98947, 1.99716, 1.98419, 2.02553, 1.93354, 2.02647, 1.90120]]),
+            [-2.00000, -1.99690, -1.99390, -1.99345, -1.99204, -1.99105, -1.98832, -1.98817, -1.98768, -1.98878],
+            [-2.00000, -1.99291, -1.99339, -1.98879, -1.98774, -1.99044, -1.99279, -1.99338, -1.99218, -1.99169],
+            [2.00000, 2.01116, 2.02297, 2.02232, 2.02713, 2.03658, 2.02043, 2.03479, 2.04448, 2.03887],
+            [2.00000, 2.00253, 1.99635, 1.99895, 1.99972, 1.99842, 2.00255, 1.99335, 2.00265, 1.99012]]),
             trajectory[:, :10], decimal=5)
 
     def test_movement_variance(self):
         np.random.seed(0)
-        somewhat_high_movement_model = Movement_Model(sigma_movement=np.array([0.1, 0.2]))
-        somewhat_high_movement_model.simulate_independent_movement()
-        movement = somewhat_high_movement_model.noise_driven_movement
-        assert_array_almost_equal([0.001, 0.001, 0.004, 0.004],
-                                  np.var(movement, axis=1), decimal=3)
 
+        stds = [(0.1, 0.2), (0.5, 0.5), (1, 1), (3, 9)]
 
+        for std in stds:
+            somewhat_high_movement_model = Movement_Model(sigma_movement=np.array(std))
+            somewhat_high_movement_model.simulate_independent_movement()
+            movement = somewhat_high_movement_model.noise_driven_movement
+            assert_array_almost_equal([std[0] ** 2 * default_experiment.dt,
+                                       std[0] ** 2 * default_experiment.dt,
+                                       std[1] ** 2 * default_experiment.dt,
+                                       std[1] ** 2 * default_experiment.dt],
+                                      np.var(movement, axis=1), decimal=1, err_msg=f"Variance for {std} is wrong")
 
 
 class Mating_Model_Test_Cases(unittest.TestCase):
-
 
     def test_mating_function_repulsion_on(self):
         never_mating = Mating_Model(sigma_mating=np.array([2.5, 2.5]),

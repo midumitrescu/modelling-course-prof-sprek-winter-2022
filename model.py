@@ -43,13 +43,17 @@ class Environment():
     def x(self):
         return self.limit_as_linspace(self.x_lims)
 
-
     @property
     def y(self):
         return self.limit_as_linspace(self.y_lims)
 
     def limit_as_linspace(self, lims: Box_limits):
         return np.linspace(lims.left, lims.right, self.resolution)
+
+    def random_vector_inside_bounds(self):
+        x_pos = self.x_width() * (np.random.random() - 0.5)
+        y_pos = self.y_width() * (np.random.random() - 0.5)
+        return np.array([x_pos, y_pos])
 
 
 default_environent = Environment()
@@ -91,11 +95,16 @@ default_experiment = Experiment()
 
 class Model:
     def __init__(self, experiment: Experiment = default_experiment, environment: Environment = default_environent,
-                 starting_position=np.zeros(4), active=True):
+                 starting_position=np.zeros(4)):
         self._experiment = experiment
         self._environment = environment
         self.mice_trajectory = np.zeros((4, self.experiment.iterations))
         self.all_gradients = np.zeros((4, self.experiment.iterations))
+
+        if starting_position is None:
+            starting_position = np.hstack((self.environment.random_vector_inside_bounds(),
+                                           self.environment.random_vector_inside_bounds()))
+
         self.mice_trajectory[:, 0] = starting_position
 
     @property
@@ -110,7 +119,7 @@ class Model:
         self.experiment.reset()
 
         for index in range(0, len(self.experiment.time) - 1):
-            gradient = self.gradient(self.mice_trajectory[:, self.experiment.current_index])
+            gradient = self.gradient_step(self.mice_trajectory[:, self.experiment.current_index])
             self.mice_trajectory[:, self.experiment.current_index + 1] = \
                 self.mice_trajectory[:, self.experiment.current_index] + \
                 gradient
@@ -123,7 +132,7 @@ class Model:
         return self.mice_trajectory
 
     @abstractmethod
-    def gradient(self, mice_position):
+    def gradient_step(self, mice_position):
         pass
 
     def save_gradient(self, gradient):
@@ -133,7 +142,7 @@ class Model:
 class Mating_Model(Model):
 
     def __init__(self, experiment: Experiment = default_experiment, mating_w=None, sigma_mating=np.array([2, 2]),
-                 mating_peak=np.array([0.005, 0.005]), phase=0, starting_pos = (-2, -2, 2, 2)):
+                 mating_peak=np.array([0.005, 0.005]), phase=0, starting_pos=(-2, -2, 2, 2)):
         super().__init__(experiment=experiment, starting_position=starting_pos)
         if mating_w is None:
             mating_w = 2 * np.pi / experiment.T
@@ -143,13 +152,14 @@ class Mating_Model(Model):
         self.mating_peak = mating_peak
         self.all_mating_gradients = np.zeros((4, experiment.iterations - 1))
 
-    def gradient(self, mice_position):
+    def gradient_step(self, mice_position):
         m_1 = mice_position[:2]
         m_2 = mice_position[2:]
 
-        mating_strength = -1 * 2 * self.sigma_mating **-2 * self.mating_period[self.experiment.current_index] * \
+        mating_strength = -1 * 2 * (1 / self.sigma_mating ** 2) * self.mating_period[self.experiment.current_index] * \
                           (m_1 - m_2) * \
-                          self.mating_energy(m_1, m_2)
+                          self.mating_energy(m_1, m_2) * \
+                          self.experiment.dt
 
         mating_gradient = np.hstack((mating_strength, -mating_strength)).T
         self.all_mating_gradients[:, self.experiment.current_index] = mating_gradient
@@ -166,8 +176,8 @@ default_mating_model = Mating_Model()
 class Movement_Model(Model):
 
     def __init__(self, experiment: Experiment = default_experiment,
-                 sigma_movement=np.array([0.05, 0.1]), testing=True):
-        super().__init__(experiment)
+                 sigma_movement=np.array([0.05, 0.1]), testing=True, starting_position=np.zeros(4)):
+        super().__init__(experiment=experiment, starting_position=starting_position)
         self.sigma_movement = sigma_movement
 
         if testing:
@@ -182,8 +192,8 @@ class Movement_Model(Model):
                                                                    covar_scaled_with_sqrt_dt,
                                                                    self.experiment.iterations).T
 
-    def gradient(self, mice_position):
-        return self.noise_driven_movement[:, self.experiment.current_index]
+    def gradient_step(self, mice_position):
+        return self.experiment.dt * self.noise_driven_movement[:, self.experiment.current_index]
 
 
 default_movement_model = Movement_Model()
@@ -197,8 +207,8 @@ class Feeding_Model(Model):
 
     def __init__(self, environment: Environment = default_environent, experiment: Experiment = default_experiment,
                  food_position: np.ndarray = None, feeding_radius=10 ** -3,
-                 hunger_freq: np.ndarray = np.array([100, 100]),  starting_pos = (-2, -2, 2, 2)):
-        super().__init__(experiment=experiment, environment=environment,  starting_position=starting_pos)
+                 hunger_freq: np.ndarray = np.array([100, 100]), starting_pos=(-2, -2, 2, 2)):
+        super().__init__(experiment=experiment, environment=environment, starting_position=starting_pos)
 
         self.food_pos = self.init_food_position(food_position)
         self.mouse_1_feed_events = list([-100])
@@ -210,9 +220,7 @@ class Feeding_Model(Model):
         if food_position is not None:
             return food_position
 
-        x_pos = self.environment.x_width() * (np.random.random() - 0.5)
-        y_pos = self.environment.y_width() * (np.random.random() - 0.5)
-        return np.array([x_pos, y_pos])
+        return self.environment.random_vector_inside_bounds()
 
     def check_if_mice_are_feeding(self, mice_position):
         if np.linalg.norm(mice_position[:2] - self.food_pos) < self.feeding_radius:
@@ -220,14 +228,15 @@ class Feeding_Model(Model):
         if np.linalg.norm(mice_position[2:] - self.food_pos) < self.feeding_radius:
             self.mouse_2_feed_events.append(self.experiment.current_time)
 
-    def gradient(self, mice_position):
+    def gradient_step(self, mice_position):
 
         self.check_if_mice_are_feeding(mice_position)
         last_feeding = np.array([self.mouse_1_feed_events[-1], self.mouse_2_feed_events[-1]])
         next_ideal_feeding_time = last_feeding + self.hunger_freq
 
-        return -1 * (mice_position - np.tile(self.food_pos, 2)) * np.repeat(sigmoid(next_ideal_feeding_time, max=0.1),
-                                                                            2)
+        return -1 * (mice_position - np.tile(self.food_pos, 2)) \
+               * np.repeat(sigmoid(next_ideal_feeding_time, max=0.1), 2) \
+               * self.experiment.dt
 
 
 default_feeding_model = Feeding_Model()
@@ -245,19 +254,23 @@ class Mouse_Model(Model):
         self.movement_model = movement_model
         self.feeding_model = feeding_model
 
-    def gradient(self, mice_position):
-        return self.movement_model.gradient(mice_position) + \
-               self.mating_model.gradient(mice_position) + \
-               self.feeding_model.gradient(mice_position)
+    def gradient_step(self, mice_position):
+        return self.movement_model.gradient_step(mice_position) + \
+               self.mating_model.gradient_step(mice_position) + \
+               self.feeding_model.gradient_step(mice_position)
 
 
 def plot_trajectory(trajectory, fig=plt, ax=plt.gca(), color='blue', label='Mouse', show=False,
-                    environment=default_environent):
-    ax.plot(trajectory[0], trajectory[1], color=color, label=f'{label} trajectory')
-    ax.plot(trajectory[0, 0], trajectory[1, 0], marker = '.', color = color, markersize = 25,
-            label = f'{label} start position')
-    ax.set_xlabel('cage limits, x axis')
-    ax.set_ylabel('cage limits, y axis')
+                    environment=default_environent, start_pos_color=None, show_label=True):
+    if start_pos_color is None:
+        start_pos_color = color
+    ax.plot(trajectory[0], trajectory[1], color=color, label=f'{label} trajectory', alpha=0.6)
+    ax.plot(trajectory[0, 0], trajectory[1, 0], marker='.', color=start_pos_color, markersize=25,
+            label=f'{label} start position')
+
+    if show_label:
+        ax.set_xlabel('cage limits, x axis')
+        ax.set_ylabel('cage limits, y axis')
     ax.set_aspect("equal")
 
     rect = patches.Rectangle((environment.x_lims.left - .05, environment.y_lims.left - .05),
