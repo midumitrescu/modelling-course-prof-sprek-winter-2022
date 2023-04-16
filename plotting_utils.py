@@ -7,12 +7,8 @@ from model import default_experiment, Mating_Model, default_environent, default_
 module_path = os.path.abspath(os.path.join('../src'))  # or the path to your source code
 sys.path.insert(0, module_path)
 import numpy as np
-import pdb
 
 from matplotlib import pyplot as plt
-from scipy.stats import multivariate_normal
-
-import unittest
 
 
 def plot_energy_3d(fig, pos, max, origin=(0, 0), sigma=2):
@@ -163,7 +159,7 @@ def plot_example_exploration_trajectories():
     fig.suptitle("Example trajectories of mice \n exploring using gaussian white noise")
     for axis in ax.flatten():
         example_movement = Movement_Model(starting_position=None, testing=False,
-                                          sigma_movement=np.array([0.7, 1.4]))
+                                          sigma_movement=np.array([0.07, 0.14]))
         trajectory = example_movement.simulate()
         plot_trajectory(trajectory[:2], fig=fig, ax=axis, color='blue', label='Mouse 1', start_pos_color='brown',
                         show_label=False)
@@ -176,13 +172,15 @@ def plot_example_exploration_trajectories():
     fig.show()
 
 
-def plot_example_full_trajectories():
-    fig, ax = plt.subplots(3, 3, layout="tight", figsize=(10, 6), sharex=True, sharey=True)
+def plot_example_full_trajectories(figsize=(10, 6)):
+    fig, ax = plt.subplots(3, 3, layout="tight", figsize=figsize, sharex=True, sharey=True)
     fig.suptitle("Example trajectories of mice")
 
     for index in range(3):
-        mouse_model = Mouse_Model(starting_position=None, movement_model=Movement_Model(testing=False,
-                                                                                             sigma_movement=[0.7, 1.4]))
+        mating_model = Mating_Model(sigma_mating=np.array([1, 1]), mating_max=np.array([0.1, 0.1]))
+        feeding_model = Feeding_Model(hunger_strength=np.array([0.01, 0.02]), hunger_half_time=np.array([100, 100]))
+        movement_model = Movement_Model(sigma_movement=[0.2, 0.3])
+        mouse_model = Mouse_Model(starting_position=None, movement_model=movement_model, feeding_model=feeding_model, mating_model=mating_model)
         trajectory = mouse_model.simulate()
         half_experiment = int(mouse_model.experiment.iterations / 2)
 
@@ -222,26 +220,11 @@ def plot_example_full_trajectories():
     fig.show()
 
 
-class Ploting_Test_Cases(unittest.TestCase):
 
-    def test_plotting_gaussian_2_d(self):
-        plot_mating_energy_landscape()
 
-    def test_mating_function_attraction_on(self):
-        exemplify_mating_on_and_mating_off_trajectory_and_gradient_evolution()
 
-    def test_sigmoid_implementation_default_values(self):
-        plot_sigmoid_function_output()
 
-    def test_ploting_effect_of_hunger_model_in_isolation(self):
-        plot_feeding_example_trajectory()
 
-    def test_plotting_movement_trajectories(self):
-        np.random.seed(0)
-        plot_example_exploration_trajectories()
 
-    def test_plotting_full_trajectories(self):
-        plot_example_full_trajectories()
 
-    def test_halves(self):
-        pass
+

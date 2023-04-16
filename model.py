@@ -163,6 +163,7 @@ class Mating_Model(Model):
 
         mating_gradient = np.hstack((mating_strength, -mating_strength)).T
         self.all_mating_gradients[:, self.experiment.current_index] = mating_gradient
+        self.all_gradients[:, self.experiment.current_index] = mating_gradient
         return mating_gradient
 
     def mating_energy(self, m_1, m_2):
@@ -193,7 +194,9 @@ class Movement_Model(Model):
                                                                    self.experiment.iterations).T
 
     def gradient_step(self, mice_position):
-        return self.experiment.dt * self.noise_driven_movement[:, self.experiment.current_index]
+        gradient = self.noise_driven_movement[:, self.experiment.current_index]
+        self.all_gradients[:, self.experiment.current_index] = gradient
+        return gradient
 
 
 default_movement_model = Movement_Model()
@@ -251,9 +254,10 @@ class Feeding_Model(Model):
         next_ideal_feeding_time = last_feeding + self.hunger_freq
         mice_hunger_strength = sigmoid_2(x=self.experiment.current_time, half_value=next_ideal_feeding_time, max=self.hunger_strength)
 
-        return -1 * (mice_position - np.tile(self.food_pos, 2)) \
-               * np.repeat(mice_hunger_strength, 2) \
-               * self.experiment.dt
+        gradient = -1 * (mice_position - np.tile(self.food_pos, 2)) * np.repeat(mice_hunger_strength, 2) * self.experiment.dt
+
+        self.all_gradients[:, self.experiment.current_index] = gradient
+        return gradient
 
 
 default_feeding_model = Feeding_Model()
