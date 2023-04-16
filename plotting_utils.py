@@ -21,7 +21,7 @@ def plot_energy_3d(fig, pos, max, origin=(0, 0), sigma=2):
 
     x, y = np.meshgrid(x, y)
 
-    z = max * np.exp(- ((x - origin[0]) ** 2 + (y - origin[1]) ** 2) / sigma ** 2)
+    z = -1 * max * np.exp(- ((x - origin[0]) ** 2 + (y - origin[1]) ** 2) / sigma ** 2)
 
     ax = fig.add_subplot(1, 3, pos, projection='3d')
     ax.plot(0, 0, -1, marker='.', color='red', markersize=25)
@@ -39,9 +39,9 @@ def plot_energy_3d(fig, pos, max, origin=(0, 0), sigma=2):
 def plot_mating_energy_landscape(figsize=(20, 10)):
     fig = plt.figure(figsize=figsize)
 
-    ax_1 = plot_energy_3d(fig, 1, np.min(default_mating_model.mating_period))
+    ax_1 = plot_energy_3d(fig, 1, -1)
     ax_2 = plot_energy_3d(fig, 2, default_mating_model.mating_period[1])
-    ax_3 = plot_energy_3d(fig, 3, np.max(default_mating_model.mating_period))
+    ax_3 = plot_energy_3d(fig, 3, 1)
     fig.legend(labels=['Relative position of mouse 2'], markerscale=0.001, fontsize='large', loc='lower right')
     ax_1.set_title("Mice rejecting each other")
     ax_2.set_title("Mice are neutral \n to mating")
@@ -59,13 +59,13 @@ def plot_mating_trajectory(model: Mating_Model, fig, ax,
     ax.set_title(ax_title)
 
 
-def exemplify_mating_on_and_mating_off_trajectory_and_gradient_evolution():
-    always_mating, always_rejecting = plot_mice_trajetories_for_mating_season_on_and_off()
-    plot_mating_desire_gradients_for_mating_on_and_off(always_mating, always_rejecting)
+def exemplify_mating_on_and_mating_off_trajectory_and_gradient_evolution(figsize=(9, 9)):
+    always_mating, always_rejecting = plot_mice_trajetories_for_mating_season_on_and_off(figsize)
+    plot_mating_desire_gradients_for_mating_on_and_off(always_mating, always_rejecting, figsize)
 
 
-def plot_mating_desire_gradients_for_mating_on_and_off(always_mating, always_rejecting):
-    fig, ax = plt.subplots(1, 2, layout="tight", figsize=(10, 4), sharex=True, sharey=True)
+def plot_mating_desire_gradients_for_mating_on_and_off(always_mating, always_rejecting, figsize=(10, 4)):
+    fig, ax = plt.subplots(1, 2, layout="tight", figsize=figsize, sharex=True, sharey=True)
     fig.suptitle("Dynamical evolution of mating desire gradient size")
     plot_mating_desire(always_mating, fig, ax[0], ax_title='when mating season is peaking')
     plot_mating_desire(always_rejecting, fig, ax[1], ax_title='when mice reject each other')
@@ -74,8 +74,8 @@ def plot_mating_desire_gradients_for_mating_on_and_off(always_mating, always_rej
     fig.show()
 
 
-def plot_mice_trajetories_for_mating_season_on_and_off():
-    fig, ax = plt.subplots(1, 2, layout="tight", figsize=(9, 9))
+def plot_mice_trajetories_for_mating_season_on_and_off(figsize=(9, 9)):
+    fig, ax = plt.subplots(1, 2, layout="tight", figsize=figsize)
     fig.suptitle("Example of mice trajectories")
     always_mating = simulate_always_mating()
     always_rejecting = simulate_always_rejecting()
@@ -88,7 +88,7 @@ def plot_mice_trajetories_for_mating_season_on_and_off():
 
 def simulate_always_mating():
     always_mating = Mating_Model(sigma_mating=np.array([2.5, 2.5]),
-                                 mating_peak=np.array([0.05, 0.05]))
+                                 mating_max=np.array([0.05, 0.05]))
     always_mating.mating_period = np.ones(default_experiment.time.shape)
 
     always_mating.simulate()
@@ -97,7 +97,7 @@ def simulate_always_mating():
 
 def simulate_always_rejecting():
     always_rejecting = Mating_Model(sigma_mating=np.array([2.5, 2.5]),
-                                    mating_peak=np.array([0.05, 0.05]),
+                                    mating_max=np.array([0.05, 0.05]),
                                     starting_pos=[-0.5, -0.5, 0.5, 0.5])
     always_rejecting.mating_period = -1 * np.ones(default_experiment.time.shape)
 
@@ -138,10 +138,10 @@ def plot_sigmoid_function_output():
     fig.show()
 
 
-def plot_feeding_example_trajectory():
+def plot_feeding_example_trajectory(figsize=(4.5, 4.5)):
     feeding_model = Feeding_Model(food_position=np.array([0, 0]), starting_pos=[-2, -2, 1, 2.7])
 
-    fig, ax = plt.subplots(1, 1, layout="tight", figsize=(4.5, 4.5))
+    fig, ax = plt.subplots(1, 1, layout="tight", figsize=figsize)
     fig.suptitle("Example of mice trajectories \n driven by hunger")
 
     trajectory = feeding_model.simulate()

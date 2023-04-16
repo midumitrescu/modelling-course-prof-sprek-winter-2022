@@ -142,14 +142,14 @@ class Model:
 class Mating_Model(Model):
 
     def __init__(self, experiment: Experiment = default_experiment, mating_w=None, sigma_mating=np.array([2, 2]),
-                 mating_peak=np.array([0.005, 0.005]), phase=0, starting_pos=(-2, -2, 2, 2)):
+                 mating_max=np.array([0.005, 0.005]), phase=0, starting_pos=(-2, -2, 2, 2)):
         super().__init__(experiment=experiment, starting_position=starting_pos)
         if mating_w is None:
             mating_w = 2 * np.pi / experiment.T
 
         self.mating_period = np.sin(mating_w * experiment.time + phase)
         self.sigma_mating = sigma_mating
-        self.mating_peak = mating_peak
+        self.mating_peak = mating_max
         self.all_mating_gradients = np.zeros((4, experiment.iterations - 1))
 
     def gradient_step(self, mice_position):
@@ -221,15 +221,15 @@ class Feeding_Model(Model):
                  food_position: np.ndarray = None,
                  feeding_radius=10 ** -3,
                  hunger_strength: np.ndarray = np.array([1, 1]),
-                 hunger_freq: np.ndarray = np.array([100, 100]),
+                 hunger_half_time: np.ndarray = np.array([100, 100]),
                  starting_pos=(-2, -2, 2, 2)):
         super().__init__(experiment=experiment, environment=environment, starting_position=starting_pos)
 
         self.food_pos = self.init_food_position(food_position)
-        self.mouse_1_feed_events = list([- hunger_freq[0]])
-        self.mouse_2_feed_events = list([- hunger_freq[1]])
+        self.mouse_1_feed_events = list([- hunger_half_time[0]])
+        self.mouse_2_feed_events = list([- hunger_half_time[1]])
         self.feeding_radius = feeding_radius
-        self.hunger_freq = hunger_freq
+        self.hunger_freq = hunger_half_time
         self.hunger_strength = hunger_strength
 
     def init_food_position(self, food_position):

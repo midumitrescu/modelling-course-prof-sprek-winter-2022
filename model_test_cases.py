@@ -128,7 +128,7 @@ class Mating_Model_Test_Cases(unittest.TestCase):
 
     def test_mating_function_repulsion_on(self):
         never_mating = Mating_Model(sigma_mating=np.array([2.5, 2.5]),
-                                    mating_peak=np.array([0.005, 0.005]))
+                                    mating_max=np.array([0.005, 0.005]))
         never_mating.mating_period = -1 * np.ones(default_experiment.time.shape)
         never_mating.mice_trajectory[:, 0] = [-0.05, -0.05, 1, 0.5]
 
