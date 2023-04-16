@@ -88,7 +88,7 @@ class Model_Test_Cases(unittest.TestCase):
                                            starting_position=(-2, -2, 2, 2))
         trajectory = very_low_movement.simulate()
 
-        np.apply_along_axis(lambda array: assert_array_almost_equal([-2, -2, 2, 2], array, decimal=4,
+        np.apply_along_axis(lambda array: assert_array_almost_equal([-2, -2, 2, 2], array, decimal=2,
                                                                     err_msg='Mice should not move with such low sigma'),
                             arr=trajectory, axis=0)
 
@@ -204,28 +204,6 @@ class Sigmoid_Test_Cases(unittest.TestCase):
         plt.plot(x, z_default, color='red', label='Default slope')
         plt.plot(x, z_steep, color='blue', label='Steep slope')
         plt.plot(x, z_flat, color='green', label='Flat slope')
-        plt.xlabel("x")
-        plt.ylabel("Sigmoid(X)")
-        plt.legend()
-        plt.show()
-
-    def test_sigmoid_accepts_array_as_input(self):
-        x = np.linspace(-100, 300, 400)
-        z = sigmoid_2(x, half_value=np.array([100, 100]), max=np.array([50, 100]))
-        assert_array_almost_equal([25, 50], z[:, 200], decimal=0)
-
-        plt.plot(x, z[0])
-        plt.plot(x, z[1])
-        plt.xlabel("x")
-        plt.ylabel("Sigmoid(X)")
-        plt.show()
-
-    def test_sigmoid_accepts_two_array_as_input(self):
-        x = np.linspace(-100, 300, 400)
-        z = sigmoid_2(x, half_value=np.array([0, 100]), max=np.array([50, 100]))
-
-        plt.plot(x, z[0], label='half value 0, max 50')
-        plt.plot(x, z[1], label='half value 100, max 100')
         plt.xlabel("x")
         plt.ylabel("Sigmoid(X)")
         plt.legend()

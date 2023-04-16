@@ -77,7 +77,7 @@ def plot_mice_trajetories_for_mating_season_on_and_off(figsize=(9, 9)):
     always_rejecting = simulate_always_rejecting()
     plot_mating_trajectory(always_mating, fig, ax[0], ax_title='when mating season is peaking')
     plot_mating_trajectory(always_rejecting, fig, ax[1], ax_title='when mice reject each other')
-    ax[1].legend(loc='lower right')
+    ax[1].legend(bbox_to_anchor=(1.01, 1.01), loc='lower right')
     fig.show()
     return always_mating, always_rejecting
 
