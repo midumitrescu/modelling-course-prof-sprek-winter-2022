@@ -177,7 +177,7 @@ def plot_example_full_trajectories(figsize=(10, 6)):
     fig.suptitle("Example trajectories of mice")
 
     for index in range(3):
-        mating_model = Mating_Model(sigma_mating=np.array([1, 1]), mating_max=np.array([0.1, 0.1]))
+        mating_model = Mating_Model(sigma_mating=np.array([3, 3]), mating_max=np.array([0.1, 0.1]))
         feeding_model = Feeding_Model(hunger_strength=np.array([0.01, 0.02]), hunger_half_time=np.array([100, 100]))
         movement_model = Movement_Model(sigma_movement=[0.2, 0.3])
         mouse_model = Mouse_Model(starting_position=None, movement_model=movement_model, feeding_model=feeding_model, mating_model=mating_model)

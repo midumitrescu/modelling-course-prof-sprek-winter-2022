@@ -40,6 +40,7 @@ class Ploting_Test_Cases(unittest.TestCase):
         plot_example_exploration_trajectories()
 
     def test_plotting_full_trajectories(self):
+        np.random.seed(0)
         plot_example_full_trajectories()
 
     def test_other_parameters(self):
