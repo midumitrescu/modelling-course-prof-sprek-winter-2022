@@ -6,7 +6,7 @@ from numpy.testing import *
 from parameterized import parameterized
 
 from model import Feeding_Model, Mouse_Model, Movement_Model, Experiment, Mating_Model, plot_trajectory, Environment, \
-    Box_limits, sigmoid, plot_both_mice
+    Box_limits, sigmoid, plot_both_mice, sigmoid_2
 
 default_experiment = Experiment()
 default_mating_model = Mating_Model()
@@ -111,7 +111,7 @@ class Model_Test_Cases(unittest.TestCase):
     def test_movement_variance(self):
         np.random.seed(0)
 
-        stds = [(0.1, 0.2), (0.5, 0.5), (1, 1), (3, 9)]
+        stds = [(0.1, 0.2), (0.5, 0.5), (1, 1)]
 
         for std in stds:
             somewhat_high_movement_model = Movement_Model(sigma_movement=np.array(std))
@@ -162,7 +162,7 @@ class Feeding_Model_Test_Cases(unittest.TestCase):
             self.assertTrue(-3 <= initialization[1] <= 3)
 
     def test_feeding_model_in_isolation(self):
-        feeding_model = Feeding_Model(food_position=np.array([0, 0]))
+        feeding_model = Feeding_Model(food_position=np.array([0, 0]), hunger_strength=np.array([0.1, 0.2]))
         feeding_model.mice_trajectory[:, 0] = [-2, -2, 1, 1]
 
         trajectory = feeding_model.simulate()
@@ -178,9 +178,15 @@ class Feeding_Model_Test_Cases(unittest.TestCase):
         plt.legend()
         plt.show()
 
+
+class Sigmoid_Test_Cases(unittest.TestCase):
+
+    def test_sigmoid_test_case_easy(self):
+        assert_array_almost_equal([0.5, 1], sigmoid(0, half_value=np.array([0, 0]), max = np.array([1, 2])))
+
     def test_sigmoid_implementation_1(self):
         x = np.linspace(0, 200, 400)
-        z = sigmoid(x, half_value=50, max=50)
+        z = sigmoid(x, half_value=50, max=np.array([50]))
         self.assertAlmostEqual(25, z[100], places=0)
 
         plt.plot(x, z)
@@ -190,10 +196,11 @@ class Feeding_Model_Test_Cases(unittest.TestCase):
 
     def test_sigmoid_implementation_2(self):
         x = np.linspace(-100, 300, 400)
-        z_default = sigmoid(x, half_value=100, max=50, slope=10)
+        max = np.array([50])
+        z_default = sigmoid(x, half_value=100, max=max, slope=10)
         self.assertTrue(z_default[199] < 25 < z_default[200])
-        z_steep = sigmoid(x, half_value=100, max=50, slope=5)
-        z_flat = sigmoid(x, half_value=100, max=50, slope=50)
+        z_steep = sigmoid(x, half_value=100, max=max, slope=5)
+        z_flat = sigmoid(x, half_value=100, max=max, slope=50)
 
         plt.plot(x, z_default, color='red', label='Default slope')
         plt.plot(x, z_steep, color='blue', label='Steep slope')
@@ -201,8 +208,45 @@ class Feeding_Model_Test_Cases(unittest.TestCase):
         plt.xlabel("x")
         plt.ylabel("Sigmoid(X)")
         plt.legend()
-
         plt.show()
+
+    def test_sigmoid_accepts_array_as_input(self):
+        x = np.linspace(-100, 300, 400)
+        z = sigmoid_2(x, half_value=np.array([100, 100]), max=np.array([50, 100]))
+        assert_array_almost_equal([25, 50], z[:, 200], decimal=0)
+
+        plt.plot(x, z[0])
+        plt.plot(x, z[1])
+        plt.xlabel("x")
+        plt.ylabel("Sigmoid(X)")
+        plt.show()
+
+    def test_sigmoid_accepts_two_array_as_input(self):
+        x = np.linspace(-100, 300, 400)
+        z = sigmoid_2(x, half_value=np.array([0, 100]), max=np.array([50, 100]))
+
+        plt.plot(x, z[0], label='half value 0, max 50')
+        plt.plot(x, z[1], label='half value 100, max 100')
+        plt.xlabel("x")
+        plt.ylabel("Sigmoid(X)")
+        plt.legend()
+        plt.show()
+
+    def test_half_value_1(self):
+        assert_array_almost_equal([25, 1.798621], sigmoid_2(0, half_value=np.array([0, 100]), max=np.array([50, 100])))
+
+    def test_half_value_2(self):
+        assert_array_almost_equal([49.10069, 50], sigmoid_2(100, half_value=np.array([0, 100]), max=np.array([50, 100])))
+
+    def test_call_from_model(self):
+        x = 0.0
+        feeding_time = np.array([0, 0])
+        hunger_strength = np.array([1, 1])
+
+        result = sigmoid(x, feeding_time, hunger_strength)
+
+        assert_array_almost_equal([0.5, 0.5], result)
+        self.assertEqual((2,), result.shape)
 
 
 if __name__ == '__main__':

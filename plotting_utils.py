@@ -88,7 +88,7 @@ def plot_mice_trajetories_for_mating_season_on_and_off():
 
 def simulate_always_mating():
     always_mating = Mating_Model(sigma_mating=np.array([2.5, 2.5]),
-                                 mating_peak=np.array([0.005, 0.005]))
+                                 mating_peak=np.array([0.05, 0.05]))
     always_mating.mating_period = np.ones(default_experiment.time.shape)
 
     always_mating.simulate()
@@ -97,7 +97,7 @@ def simulate_always_mating():
 
 def simulate_always_rejecting():
     always_rejecting = Mating_Model(sigma_mating=np.array([2.5, 2.5]),
-                                    mating_peak=np.array([0.005, 0.005]),
+                                    mating_peak=np.array([0.05, 0.05]),
                                     starting_pos=[-0.5, -0.5, 0.5, 0.5])
     always_rejecting.mating_period = -1 * np.ones(default_experiment.time.shape)
 
@@ -148,10 +148,14 @@ def plot_feeding_example_trajectory():
     plot_trajectory(trajectory[:2], fig=fig, ax=ax, color='blue', label='Mouse 1')
     plot_trajectory(trajectory[2:], fig=fig, ax=ax, color='red', label='Mouse 2')
 
-    ax.plot(feeding_model.food_pos[0], feeding_model.food_pos[1], marker='.', color='yellow', markersize=25,
-            label=f'Food position')
+    plot_feeding_spot(ax, feeding_model)
     ax.legend(loc='lower right')
     fig.show()
+
+
+def plot_feeding_spot(ax, feeding_model):
+    ax.plot(feeding_model.food_pos[0], feeding_model.food_pos[1], marker='.', color='yellow', markersize=25,
+            label=f'Food position')
 
 
 def plot_example_exploration_trajectories():
@@ -159,7 +163,7 @@ def plot_example_exploration_trajectories():
     fig.suptitle("Example trajectories of mice \n exploring using gaussian white noise")
     for axis in ax.flatten():
         example_movement = Movement_Model(starting_position=None, testing=False,
-                                          sigma_movement=np.array([0.07, 0.14]))
+                                          sigma_movement=np.array([0.7, 1.4]))
         trajectory = example_movement.simulate()
         plot_trajectory(trajectory[:2], fig=fig, ax=axis, color='blue', label='Mouse 1', start_pos_color='brown',
                         show_label=False)
@@ -177,16 +181,17 @@ def plot_example_full_trajectories():
     fig.suptitle("Example trajectories of mice")
 
     for index in range(3):
-        example_movement = Mouse_Model(starting_position=None, movement_model=Movement_Model(testing=False,
-                                                                                             sigma_movement=[0.1, 0.2]))
-        trajectory = example_movement.simulate()
-        half_experiment = int(example_movement.experiment.iterations / 2)
+        mouse_model = Mouse_Model(starting_position=None, movement_model=Movement_Model(testing=False,
+                                                                                             sigma_movement=[0.7, 1.4]))
+        trajectory = mouse_model.simulate()
+        half_experiment = int(mouse_model.experiment.iterations / 2)
 
         plot_trajectory(trajectory[:2], fig=fig, ax=ax[index, 0], color='blue', label='Mouse 1',
                         start_pos_color='brown',
                         show_label=False)
         plot_trajectory(trajectory[2:], fig=fig, ax=ax[index, 0], color='red', label='Mouse 2', start_pos_color='green',
                         show_label=False)
+        plot_feeding_spot(ax=ax[index, 0], feeding_model=mouse_model.feeding_model)
 
         plot_trajectory(trajectory[:2, :half_experiment], fig=fig, ax=ax[index, 1], color='blue', label='Mouse 1',
                         start_pos_color='brown',
@@ -194,6 +199,7 @@ def plot_example_full_trajectories():
         plot_trajectory(trajectory[2:, :half_experiment], fig=fig, ax=ax[index, 1], color='red', label='Mouse 2',
                         start_pos_color='green',
                         show_label=False)
+        plot_feeding_spot(ax=ax[index, 1], feeding_model=mouse_model.feeding_model)
 
         plot_trajectory(trajectory[:2, half_experiment:], fig=fig, ax=ax[index, 2], color='blue', label='Mouse 1',
                         start_pos_color='brown',
@@ -201,6 +207,7 @@ def plot_example_full_trajectories():
         plot_trajectory(trajectory[2:, half_experiment:], fig=fig, ax=ax[index, 2], color='red', label='Mouse 2',
                         start_pos_color='green',
                         show_label=False)
+        plot_feeding_spot(ax=ax[index, 2], feeding_model=mouse_model.feeding_model)
     cols = ['Full experiment\nlength', 'Mating period on\nhalf of time', 'Rejection period on\nother half of time']
     for axis, col in zip(ax[0], cols):
         axis.set_title(col)

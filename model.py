@@ -176,7 +176,7 @@ default_mating_model = Mating_Model()
 class Movement_Model(Model):
 
     def __init__(self, experiment: Experiment = default_experiment,
-                 sigma_movement=np.array([0.05, 0.1]), testing=True, starting_position=np.zeros(4)):
+                 sigma_movement=np.array([0.05, 0.1]), testing=False, starting_position=np.zeros(4)):
         super().__init__(experiment=experiment, starting_position=starting_position)
         self.sigma_movement = sigma_movement
 
@@ -202,19 +202,35 @@ default_movement_model = Movement_Model()
 def sigmoid(x, half_value=100, max: float = 1, slope=25):
     return max / (1 + np.exp(- (x - half_value) / slope))
 
+def sigmoid_2(x, half_value=np.array([100]), max: np.ndarray = np.array([1]), slope=25):
+    if type(x) is np.ndarray:
+        x_2_d = np.vstack((x, x))
+    else:
+        x_2_d = np.array([x, x])
+    s = (1 + np.exp(- (x_2_d - half_value) / slope)) ** -1
+    result = max * s
+    if result.shape[0] == 1:
+        return result[0]
+    else:
+        return result
+
 
 class Feeding_Model(Model):
 
     def __init__(self, environment: Environment = default_environent, experiment: Experiment = default_experiment,
-                 food_position: np.ndarray = None, feeding_radius=10 ** -3,
-                 hunger_freq: np.ndarray = np.array([100, 100]), starting_pos=(-2, -2, 2, 2)):
+                 food_position: np.ndarray = None,
+                 feeding_radius=10 ** -3,
+                 hunger_strength: np.ndarray = np.array([1, 1]),
+                 hunger_freq: np.ndarray = np.array([100, 100]),
+                 starting_pos=(-2, -2, 2, 2)):
         super().__init__(experiment=experiment, environment=environment, starting_position=starting_pos)
 
         self.food_pos = self.init_food_position(food_position)
-        self.mouse_1_feed_events = list([-100])
-        self.mouse_2_feed_events = list([-100])
+        self.mouse_1_feed_events = list([- hunger_freq[0]])
+        self.mouse_2_feed_events = list([- hunger_freq[1]])
         self.feeding_radius = feeding_radius
         self.hunger_freq = hunger_freq
+        self.hunger_strength = hunger_strength
 
     def init_food_position(self, food_position):
         if food_position is not None:
@@ -233,9 +249,10 @@ class Feeding_Model(Model):
         self.check_if_mice_are_feeding(mice_position)
         last_feeding = np.array([self.mouse_1_feed_events[-1], self.mouse_2_feed_events[-1]])
         next_ideal_feeding_time = last_feeding + self.hunger_freq
+        mice_hunger_strength = sigmoid_2(x=self.experiment.current_time, half_value=next_ideal_feeding_time, max=self.hunger_strength)
 
         return -1 * (mice_position - np.tile(self.food_pos, 2)) \
-               * np.repeat(sigmoid(next_ideal_feeding_time, max=0.1), 2) \
+               * np.repeat(mice_hunger_strength, 2) \
                * self.experiment.dt
 
 
